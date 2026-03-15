@@ -13,7 +13,9 @@ _LOG_FILE_OK=1   # set to 0 on first write failure; prevents repeated warnings
 _TMPDIR=""
 _cleanup() {
     # shellcheck disable=SC2317  # called via trap EXIT
-    rm -rf "$_TMPDIR" 2>/dev/null || true
+    if [ -n "$_TMPDIR" ]; then
+        rm -rf "$_TMPDIR" 2>/dev/null || true
+    fi
 }
 trap _cleanup EXIT
 
@@ -46,7 +48,7 @@ if [ -n "$JDUPES_LOG_FILE" ]; then
 fi
 
 # ── Log start ─────────────────────────────────────────────────────────────────
-_log "jdupes starting — arguments: $*"
+_log "jdupes starting — arguments: $(printf "'%s' " "$@")"
 START_EPOCH=$(date +%s)
 
 # ── Run jdupes ────────────────────────────────────────────────────────────────

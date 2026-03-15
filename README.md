@@ -45,7 +45,7 @@ services:
 ## Logging
 
 The container wraps `jdupes` with a lightweight entrypoint script that adds
-timestamped start and finish markers (including exit duration). All log lines
+timestamped start and finish markers (including execution duration). All log lines
 are written to **stderr** so they do not interfere with `jdupes` stdout output.
 Enable verbose `jdupes` output (pass `-v`) via `JDUPES_VERBOSE` to see per-file
 progress from `jdupes` itself.
