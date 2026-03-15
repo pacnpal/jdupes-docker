@@ -51,7 +51,7 @@ Enable verbose `jdupes` output (pass `-v`) via `JDUPES_VERBOSE` to see per-file
 progress from `jdupes` itself.
 
 ```
-[2024-06-01T12:00:00Z] jdupes starting — arguments: -r /data
+[2024-06-01T12:00:00Z] jdupes starting — arguments: '-r' '/data' 
 [2024-06-01T12:00:05Z] jdupes finished successfully — duration: 5s
 ```
 
