@@ -14,4 +14,6 @@ FROM alpine:latest
 COPY --from=builder /usr/local/bin/jdupes /usr/local/bin/jdupes
 COPY --from=builder /usr/local/lib/libjodycode* /usr/local/lib/
 RUN ldconfig /usr/local/lib || true
-ENTRYPOINT ["jdupes"]
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

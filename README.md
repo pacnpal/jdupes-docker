@@ -42,6 +42,62 @@ services:
 
 ---
 
+## Logging and progress monitoring
+
+The container wraps `jdupes` with a lightweight entrypoint script that adds
+timestamped logging and duration tracking. All log lines are written to
+**stderr** so they do not interfere with `jdupes` stdout output.
+
+```
+[2024-06-01T12:00:00Z] jdupes starting — arguments: -r /data
+[2024-06-01T12:00:05Z] jdupes finished successfully — duration: 5s
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JDUPES_LOG_FILE` | *(unset)* | Path inside the container to append all output (stdout + stderr) and log markers to |
+| `JDUPES_VERBOSE` | *(unset)* | Set to `1` to automatically pass `-v` (verbose) to `jdupes` |
+
+### Write logs to a file on the host
+
+Mount a host path for the log file and set `JDUPES_LOG_FILE`:
+
+```bash
+docker run --rm \
+  -v /path/to/files:/data \
+  -v /path/to/logs:/logs \
+  -e JDUPES_LOG_FILE=/logs/jdupes.log \
+  ghcr.io/pacnpal/jdupes-docker -r /data
+```
+
+### Enable verbose output
+
+```bash
+docker run --rm \
+  -v /path/to/files:/data \
+  -e JDUPES_VERBOSE=1 \
+  ghcr.io/pacnpal/jdupes-docker -r /data
+```
+
+### Docker Compose with logging
+
+```yaml
+services:
+  jdupes:
+    image: ghcr.io/pacnpal/jdupes-docker:latest
+    command: ["-r", "-d", "-N", "/data"]
+    volumes:
+      - /path/to/files:/data
+      - /path/to/logs:/logs
+    environment:
+      JDUPES_LOG_FILE: /logs/jdupes.log
+      JDUPES_VERBOSE: "1"
+```
+
+---
+
 ## Common flags
 
 | Flag | Description |
