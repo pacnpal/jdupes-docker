@@ -71,7 +71,13 @@ trap '_fwd TERM' TERM
 trap '_fwd INT'  INT
 trap '_fwd HUP'  HUP
 
-if [ -n "$JDUPES_LOG_FILE" ]; then
+# Before setting up FIFOs and tee, ensure the log file is actually writable.
+# If this fails, disable log-file-based teeing and fall back to direct output.
+if [ -n "$JDUPES_LOG_FILE" ] && ! : >> "$JDUPES_LOG_FILE" 2>/dev/null; then
+    _LOG_FILE_OK=0
+fi
+
+if [ -n "$JDUPES_LOG_FILE" ] && [ "$_LOG_FILE_OK" -eq 1 ] ; then
     _TMPDIR=$(mktemp -d) || { _log "error: mktemp -d failed"; exit 1; }
     _FIFO_OUT="$_TMPDIR/jdupes.stdout"
     _FIFO_ERR="$_TMPDIR/jdupes.stderr"
