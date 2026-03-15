@@ -1,6 +1,6 @@
 FROM alpine:latest AS builder
 
-RUN apk add --no-cache build-base git
+RUN apk add --no-cache build-base git linux-headers
 
 RUN git clone https://codeberg.org/jbruchon/libjodycode.git /libjodycode
 WORKDIR /libjodycode
