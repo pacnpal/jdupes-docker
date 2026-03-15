@@ -1,5 +1,5 @@
 #!/bin/sh
-# entrypoint.sh — jdupes wrapper with logging and progress monitoring
+# entrypoint.sh — jdupes wrapper with timestamped logging and duration tracking
 
 # ── Environment variables ─────────────────────────────────────────────────────
 # JDUPES_LOG_FILE  path to write a timestamped log of all output
@@ -7,6 +7,7 @@
 
 JDUPES_LOG_FILE="${JDUPES_LOG_FILE:-}"
 JDUPES_VERBOSE="${JDUPES_VERBOSE:-}"
+_LOG_FILE_OK=1   # set to 0 on first write failure; prevents repeated warnings
 
 # ── Temp resource tracking and cleanup ───────────────────────────────────────
 _TMPDIR=""
@@ -20,8 +21,11 @@ trap _cleanup EXIT
 _log() {
     ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
     printf '[%s] %s\n' "$ts" "$*" >&2
-    if [ -n "$JDUPES_LOG_FILE" ]; then
-        printf '[%s] %s\n' "$ts" "$*" >> "$JDUPES_LOG_FILE"
+    if [ -n "$JDUPES_LOG_FILE" ] && [ "$_LOG_FILE_OK" = "1" ]; then
+        if ! printf '[%s] %s\n' "$ts" "$*" >> "$JDUPES_LOG_FILE" 2>/dev/null; then
+            _LOG_FILE_OK=0
+            printf '[%s] warning: could not write to log file: %s\n' "$ts" "$JDUPES_LOG_FILE" >&2
+        fi
     fi
 }
 
@@ -34,7 +38,10 @@ fi
 if [ -n "$JDUPES_LOG_FILE" ]; then
     log_dir=$(dirname "$JDUPES_LOG_FILE")
     if [ "$log_dir" != "." ] && [ ! -d "$log_dir" ]; then
-        mkdir -p "$log_dir" 2>/dev/null || true
+        if ! mkdir -p "$log_dir" 2>/dev/null; then
+            printf 'error: cannot create log directory: %s\n' "$log_dir" >&2
+            exit 1
+        fi
     fi
 fi
 
@@ -45,16 +52,24 @@ START_EPOCH=$(date +%s)
 # ── Run jdupes ────────────────────────────────────────────────────────────────
 # jdupes is always run in the background so signals can be forwarded to it
 # explicitly, restoring correct PID 1 signal handling for the container.
-# Traps are installed BEFORE spawning so no signal can be missed; each trap
-# forwards its own signal (TERM→TERM, INT→INT, HUP→HUP). Single-quoted so
-# $_JDUPES_PID expands at signal-delivery time (after the PID is set).
+# Traps are installed BEFORE spawning; _fwd guards the window where _JDUPES_PID
+# is still empty by re-raising the signal to self (exit 128+signal semantics).
 #
 # When JDUPES_LOG_FILE is set, named FIFOs keep stdout and stderr on their
 # respective streams while also teeing both into the log file.
 _JDUPES_PID=""
-trap 'kill -TERM $_JDUPES_PID 2>/dev/null' TERM
-trap 'kill -INT  $_JDUPES_PID 2>/dev/null' INT
-trap 'kill -HUP  $_JDUPES_PID 2>/dev/null' HUP
+_fwd() {
+    # shellcheck disable=SC2317  # called via trap
+    if [ -n "$_JDUPES_PID" ]; then
+        kill "-$1" "$_JDUPES_PID" 2>/dev/null
+    else
+        trap - "$1"
+        kill "-$1" "$$"
+    fi
+}
+trap '_fwd TERM' TERM
+trap '_fwd INT'  INT
+trap '_fwd HUP'  HUP
 
 if [ -n "$JDUPES_LOG_FILE" ]; then
     _TMPDIR=$(mktemp -d) || { _log "error: mktemp -d failed"; exit 1; }
