@@ -9,7 +9,7 @@ A minimal Docker image for [jdupes](https://codeberg.org/jbruchon/jdupes) — a 
 
 ## Usage
 
-The container's entrypoint is `jdupes`, so you can pass flags and paths directly after the image name. Mount the directory you want to scan to `/data` inside the container.
+The container's entrypoint is a lightweight wrapper script around `jdupes`, so you can pass flags and paths directly after the image name. Mount the directory you want to scan to `/data` inside the container.
 
 ### Basic scan (dry run — list duplicates only)
 

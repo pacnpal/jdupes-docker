@@ -43,11 +43,19 @@ _log "jdupes starting — arguments: $*"
 START_EPOCH=$(date +%s)
 
 # ── Run jdupes ────────────────────────────────────────────────────────────────
-# jdupes is always run in the background so TERM/INT/HUP can be forwarded to
-# it explicitly, restoring correct signal handling for PID 1 in the container.
+# jdupes is always run in the background so signals can be forwarded to it
+# explicitly, restoring correct PID 1 signal handling for the container.
+# Traps are installed BEFORE spawning so no signal can be missed; each trap
+# forwards its own signal (TERM→TERM, INT→INT, HUP→HUP). Single-quoted so
+# $_JDUPES_PID expands at signal-delivery time (after the PID is set).
 #
 # When JDUPES_LOG_FILE is set, named FIFOs keep stdout and stderr on their
 # respective streams while also teeing both into the log file.
+_JDUPES_PID=""
+trap 'kill -TERM $_JDUPES_PID 2>/dev/null' TERM
+trap 'kill -INT  $_JDUPES_PID 2>/dev/null' INT
+trap 'kill -HUP  $_JDUPES_PID 2>/dev/null' HUP
+
 if [ -n "$JDUPES_LOG_FILE" ]; then
     _TMPDIR=$(mktemp -d) || { _log "error: mktemp -d failed"; exit 1; }
     _FIFO_OUT="$_TMPDIR/jdupes.stdout"
@@ -61,9 +69,6 @@ if [ -n "$JDUPES_LOG_FILE" ]; then
 
     jdupes "$@" > "$_FIFO_OUT" 2> "$_FIFO_ERR" &
     _JDUPES_PID=$!
-
-    # shellcheck disable=SC2064  # PID is intentionally expanded now, not at signal delivery
-    trap "kill -TERM $_JDUPES_PID 2>/dev/null" TERM INT HUP
     wait "$_JDUPES_PID"
     EXIT_CODE=$?
     wait "$_TEE_OUT_PID" || _log "warning: stdout tee exited with an error"
@@ -71,8 +76,6 @@ if [ -n "$JDUPES_LOG_FILE" ]; then
 else
     jdupes "$@" &
     _JDUPES_PID=$!
-    # shellcheck disable=SC2064  # PID is intentionally expanded now, not at signal delivery
-    trap "kill -TERM $_JDUPES_PID 2>/dev/null" TERM INT HUP
     wait "$_JDUPES_PID"
     EXIT_CODE=$?
 fi
