@@ -57,7 +57,7 @@ timestamped logging and duration tracking. All log lines are written to
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JDUPES_LOG_FILE` | *(unset)* | Path inside the container to append all output (stdout + stderr) and log markers to |
+| `JDUPES_LOG_FILE` | *(unset)* | Path inside the container to append all output and log markers. When set, stdout and stderr are preserved on separate streams while also being written to this file |
 | `JDUPES_VERBOSE` | *(unset)* | Set to `1` to automatically pass `-v` (verbose) to `jdupes` |
 
 ### Write logs to a file on the host

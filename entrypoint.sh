@@ -8,6 +8,14 @@
 JDUPES_LOG_FILE="${JDUPES_LOG_FILE:-}"
 JDUPES_VERBOSE="${JDUPES_VERBOSE:-}"
 
+# ── Temp resource tracking and cleanup ───────────────────────────────────────
+_TMPDIR=""
+_cleanup() {
+    # shellcheck disable=SC2317  # called via trap EXIT
+    rm -rf "$_TMPDIR" 2>/dev/null || true
+}
+trap _cleanup EXIT
+
 # ── Helper: write a timestamped line to stderr (and log file if set) ──────────
 _log() {
     ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -22,11 +30,7 @@ if [ "${JDUPES_VERBOSE}" = "1" ]; then
     set -- -v "$@"
 fi
 
-# ── Log start ─────────────────────────────────────────────────────────────────
-_log "jdupes starting — arguments: $*"
-START_EPOCH=$(date +%s)
-
-# ── Prepare log file directory ────────────────────────────────────────────────
+# ── Prepare log file directory BEFORE first _log call ────────────────────────
 if [ -n "$JDUPES_LOG_FILE" ]; then
     log_dir=$(dirname "$JDUPES_LOG_FILE")
     if [ "$log_dir" != "." ] && [ ! -d "$log_dir" ]; then
@@ -34,16 +38,42 @@ if [ -n "$JDUPES_LOG_FILE" ]; then
     fi
 fi
 
+# ── Log start ─────────────────────────────────────────────────────────────────
+_log "jdupes starting — arguments: $*"
+START_EPOCH=$(date +%s)
+
 # ── Run jdupes ────────────────────────────────────────────────────────────────
-# When logging to a file, tee output to both stdout and the log file while
-# preserving jdupes exit code in a temp file (POSIX-compatible, no pipefail).
+# jdupes is always run in the background so TERM/INT/HUP can be forwarded to
+# it explicitly, restoring correct signal handling for PID 1 in the container.
+#
+# When JDUPES_LOG_FILE is set, named FIFOs keep stdout and stderr on their
+# respective streams while also teeing both into the log file.
 if [ -n "$JDUPES_LOG_FILE" ]; then
-    TMP_EXIT=$(mktemp)
-    (jdupes "$@" 2>&1; echo $? > "$TMP_EXIT") | tee -a "$JDUPES_LOG_FILE"
-    EXIT_CODE=$(cat "$TMP_EXIT")
-    rm -f "$TMP_EXIT"
+    _TMPDIR=$(mktemp -d) || { _log "error: mktemp -d failed"; exit 1; }
+    _FIFO_OUT="$_TMPDIR/jdupes.stdout"
+    _FIFO_ERR="$_TMPDIR/jdupes.stderr"
+    mkfifo "$_FIFO_OUT" "$_FIFO_ERR" || { _log "error: mkfifo failed"; exit 1; }
+
+    tee -a "$JDUPES_LOG_FILE" < "$_FIFO_OUT" &
+    _TEE_OUT_PID=$!
+    tee -a "$JDUPES_LOG_FILE" < "$_FIFO_ERR" >&2 &
+    _TEE_ERR_PID=$!
+
+    jdupes "$@" > "$_FIFO_OUT" 2> "$_FIFO_ERR" &
+    _JDUPES_PID=$!
+
+    # shellcheck disable=SC2064  # PID is intentionally expanded now, not at signal delivery
+    trap "kill -TERM $_JDUPES_PID 2>/dev/null" TERM INT HUP
+    wait "$_JDUPES_PID"
+    EXIT_CODE=$?
+    wait "$_TEE_OUT_PID" || _log "warning: stdout tee exited with an error"
+    wait "$_TEE_ERR_PID" || _log "warning: stderr tee exited with an error"
 else
-    jdupes "$@"
+    jdupes "$@" &
+    _JDUPES_PID=$!
+    # shellcheck disable=SC2064  # PID is intentionally expanded now, not at signal delivery
+    trap "kill -TERM $_JDUPES_PID 2>/dev/null" TERM INT HUP
+    wait "$_JDUPES_PID"
     EXIT_CODE=$?
 fi
 
