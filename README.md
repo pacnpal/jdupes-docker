@@ -9,7 +9,7 @@ A minimal Docker image for [jdupes](https://codeberg.org/jbruchon/jdupes) — a 
 
 ## Usage
 
-The container's entrypoint is `jdupes`, so you can pass flags and paths directly after the image name. Mount the directory you want to scan to `/data` inside the container.
+The container's entrypoint is a lightweight wrapper script around `jdupes`, so you can pass flags and paths directly after the image name. Mount the directory you want to scan to `/data` inside the container.
 
 ### Basic scan (dry run — list duplicates only)
 
@@ -38,6 +38,64 @@ services:
     command: ["-r", "-d", "-N", "/data"]
     volumes:
       - /path/to/files:/data
+```
+
+---
+
+## Logging
+
+The container wraps `jdupes` with a lightweight entrypoint script that adds
+timestamped start and finish markers (including execution duration). All log lines
+are written to **stderr** so they do not interfere with `jdupes` stdout output.
+Enable verbose `jdupes` output (pass `-v`) via `JDUPES_VERBOSE` to see per-file
+progress from `jdupes` itself.
+
+```
+[2024-06-01T12:00:00Z] jdupes starting — arguments: '-r' '/data' 
+[2024-06-01T12:00:05Z] jdupes finished successfully — duration: 5s
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JDUPES_LOG_FILE` | *(unset)* | Path inside the container to append all output and log markers. When set, stdout and stderr are preserved on separate streams while also being written to this file |
+| `JDUPES_VERBOSE` | *(unset)* | Set to `1` to automatically pass `-v` (verbose) to `jdupes` |
+
+### Write logs to a file on the host
+
+Mount a host path for the log file and set `JDUPES_LOG_FILE`:
+
+```bash
+docker run --rm \
+  -v /path/to/files:/data \
+  -v /path/to/logs:/logs \
+  -e JDUPES_LOG_FILE=/logs/jdupes.log \
+  ghcr.io/pacnpal/jdupes-docker -r /data
+```
+
+### Enable verbose output
+
+```bash
+docker run --rm \
+  -v /path/to/files:/data \
+  -e JDUPES_VERBOSE=1 \
+  ghcr.io/pacnpal/jdupes-docker -r /data
+```
+
+### Docker Compose with logging
+
+```yaml
+services:
+  jdupes:
+    image: ghcr.io/pacnpal/jdupes-docker:latest
+    command: ["-r", "-d", "-N", "/data"]
+    volumes:
+      - /path/to/files:/data
+      - /path/to/logs:/logs
+    environment:
+      JDUPES_LOG_FILE: /logs/jdupes.log
+      JDUPES_VERBOSE: "1"
 ```
 
 ---
